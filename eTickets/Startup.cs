@@ -1,3 +1,4 @@
+using eTickets.Data;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -8,6 +9,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using eTickets.Data.Services;
+using Microsoft.AspNetCore.Http;
+using eTickets.Data.Cart;
+using eTickets.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace eTickets
 {
@@ -23,6 +31,25 @@ namespace eTickets
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            //DbContext configuration
+            services.AddDbContext<AppDbContext>(options => options.UseSqlServer(Configuration.GetConnectionString("DefaultConnectionString")));
+            //Services configuration
+            services.AddScoped<IActorsService, ActorsService>();
+            services.AddScoped<IProducersService, ProducersService>();
+            services.AddScoped<ICinemasService, CinemasService>();
+            services.AddScoped<IMoviesService, MoviesService>();
+            services.AddScoped<IOrdersService, OrdersService>();
+
+            services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+            services.AddScoped(sc => ShoppingCart.GetShoppingCart(sc));
+            //Authentification and authorization
+            services.AddIdentity<ApplicationUser, IdentityRole>().AddEntityFrameworkStores<AppDbContext>();
+            services.AddMemoryCache(); 
+            services.AddSession();
+            services.AddAuthentication(options =>
+            {
+                options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+            });
             services.AddControllersWithViews();
         }
 
@@ -43,8 +70,15 @@ namespace eTickets
             app.UseStaticFiles();
 
             app.UseRouting();
+            app.UseSession();
+            //Authentification & Authorization
+            app.UseAuthentication();
+            app.UseAuthorization();
+
 
             app.UseAuthorization();
+            
+           
 
             app.UseEndpoints(endpoints =>
             {
@@ -52,6 +86,10 @@ namespace eTickets
                     name: "default",
                     pattern: "{controller=Home}/{action=Index}/{id?}");
             });
+
+            //seed database
+            AppDbInitializer.Seed(app);
+            AppDbInitializer.SeedUsersAndRolesAsync(app).Wait();
         }
     }
 }
